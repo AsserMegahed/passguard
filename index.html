@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PassGuard — Password Health Checker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #13131a;
+      --border:    #1e1e2e;
+      --text:      #e8e8f0;
+      --muted:     #6b6b80;
+      --accent:    #7c6dfa;
+      --accent2:   #a78bfa;
+      --weak:      #f87171;
+      --fair:      #fb923c;
+      --good:      #facc15;
+      --strong:    #4ade80;
+      --pwned:     #f43f5e;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px 80px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .hero-badge {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      padding: 4px 10px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.6;
+    }
+
+    /* ── CARD ── */
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+    }
+
+    /* ── INPUT ── */
+    .input-wrap {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .input-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .input-row {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .input-row:focus-within {
+      border-color: var(--accent);
+    }
+    #pw-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 15px;
+      padding: 14px 16px;
+      letter-spacing: 0.05em;
+    }
+    #pw-input::placeholder { color: var(--muted); letter-spacing: 0; font-family: 'Space Grotesk', sans-serif; }
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      border-left: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0 16px;
+      font-size: 18px;
+      transition: color 0.2s;
+    }
+    .toggle-btn:hover { color: var(--text); }
+
+    /* ── STRENGTH BAR ── */
+    .strength-section { margin-bottom: 24px; }
+    .strength-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .strength-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+    .strength-text { font-size: 13px; font-weight: 700; font-family: 'Space Mono', monospace; }
+    .bar-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.4s cubic-bezier(0.34,1.56,0.64,1), background 0.3s;
+    }
+
+    /* ── CHECKS ── */
+    .checks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: color 0.2s;
+    }
+    .check-item.pass { color: var(--text); }
+    .check-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .check-item.pass .check-dot {
+      background: var(--strong);
+      border-color: var(--strong);
+      color: #000;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 0 24px;
+    }
+
+    /* ── BREACH SECTION ── */
+    .breach-btn {
+      width: 100%;
+      padding: 13px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      color: var(--accent2);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 16px;
+    }
+    .breach-btn:hover { background: rgba(124,109,250,0.1); }
+    .breach-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .breach-result {
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      display: none;
+    }
+    .breach-result.show { display: block; }
+    .breach-result.safe { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); color: var(--strong); }
+    .breach-result.pwned { background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2); color: var(--pwned); }
+    .breach-result.error { background: rgba(251,146,60,0.08); border: 1px solid rgba(251,146,60,0.2); color: var(--fair); }
+
+    .breach-result .breach-icon { font-size: 20px; margin-bottom: 4px; display: block; }
+    .breach-result strong { display: block; font-size: 14px; margin-bottom: 2px; }
+
+    /* ── SUGGESTIONS ── */
+    .suggestions {
+      margin-top: 24px;
+      display: none;
+    }
+    .suggestions.show { display: block; }
+    .suggestions-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .suggestion-tag {
+      display: inline-block;
+      background: rgba(124,109,250,0.1);
+      border: 1px solid rgba(124,109,250,0.25);
+      color: var(--accent2);
+      font-size: 12px;
+      border-radius: 6px;
+      padding: 4px 10px;
+      margin: 3px 3px 3px 0;
+    }
+
+    /* ── GENERATE ── */
+    .gen-section { margin-top: 24px; }
+    .gen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .gen-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .gen-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .gen-btn:hover { opacity: 0.85; }
+
+    .gen-output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      color: var(--accent2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      min-height: 46px;
+    }
+    .gen-output span { word-break: break-all; flex: 1; }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 4px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top: 32px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .footer a { color: var(--accent2); text-decoration: none; }
+
+    @media (max-width: 480px) {
+      .checks { grid-template-columns: 1fr; }
+      .card { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <div class="hero-badge">Free · Private · No data stored</div>
+    <h1>Is your password<br><span>actually safe?</span></h1>
+    <p>Check strength, detect leaks, and generate a better password — all in your browser.</p>
+  </div>
+
+  <div class="card">
+
+    <!-- Input -->
+    <label class="input-label" for="pw-input">Your Password</label>
+    <div class="input-wrap">
+      <div class="input-row">
+        <input id="pw-input" type="password" placeholder="Type or paste your password…" autocomplete="off" spellcheck="false"/>
+        <button class="toggle-btn" id="toggle-vis" title="Show/hide">👁</button>
+      </div>
+    </div>
+
+    <!-- Strength -->
+    <div class="strength-section">
+      <div class="strength-header">
+        <span class="strength-label">Strength</span>
+        <span class="strength-text" id="strength-text" style="color:var(--muted)">—</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="bar-fill"></div>
+      </div>
+    </div>
+
+    <!-- Checks -->
+    <div class="checks" id="checks">
+      <div class="check-item" id="chk-len">
+        <div class="check-dot">✓</div><span>12+ characters</span>
+      </div>
+      <div class="check-item" id="chk-upper">
+        <div class="check-dot">✓</div><span>Uppercase letter</span>
+      </div>
+      <div class="check-item" id="chk-lower">
+        <div class="check-dot">✓</div><span>Lowercase letter</span>
+      </div>
+      <div class="check-item" id="chk-num">
+        <div class="check-dot">✓</div><span>Number</span>
+      </div>
+      <div class="check-item" id="chk-sym">
+        <div class="check-dot">✓</div><span>Special character</span>
+      </div>
+      <div class="check-item" id="chk-norepeat">
+        <div class="check-dot">✓</div><span>No repeated chars</span>
+      </div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="suggestions" id="suggestions">
+      <div class="suggestions-label">Suggestions</div>
+      <div id="suggestion-tags"></div>
+    </div>
+
+    <hr class="divider" style="margin-top:24px;">
+
+    <!-- Breach check -->
+    <button class="breach-btn" id="breach-btn">🔍 Check if leaked in a data breach</button>
+    <div class="breach-result" id="breach-result"></div>
+
+    <hr class="divider" style="margin-top:16px;">
+
+    <!-- Generator -->
+    <div class="gen-section">
+      <div class="gen-header">
+        <span class="gen-label">Generate strong password</span>
+        <button class="gen-btn" id="gen-btn">Generate</button>
+      </div>
+      <div class="gen-output">
+        <span id="gen-text">Click Generate →</span>
+        <button class="copy-btn" id="copy-btn">Copy</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Your password never leaves your device.<br>
+    Breach check uses <a href="https://haveibeenpwned.com/API/v3#PwnedPasswords" target="_blank">HaveIBeenPwned k-anonymity API</a> — only a partial hash is sent.
+  </div>
+
+<script>
+  // ── Elements ──
+  const input       = document.getElementById('pw-input');
+  const toggleBtn   = document.getElementById('toggle-vis');
+  const barFill     = document.getElementById('bar-fill');
+  const strengthTxt = document.getElementById('strength-text');
+  const breachBtn   = document.getElementById('breach-btn');
+  const breachRes   = document.getElementById('breach-result');
+  const genBtn      = document.getElementById('gen-btn');
+  const genText     = document.getElementById('gen-text');
+  const copyBtn     = document.getElementById('copy-btn');
+  const suggestions = document.getElementById('suggestions');
+  const suggTags    = document.getElementById('suggestion-tags');
+
+  const checks = {
+    len:      document.getElementById('chk-len'),
+    upper:    document.getElementById('chk-upper'),
+    lower:    document.getElementById('chk-lower'),
+    num:      document.getElementById('chk-num'),
+    sym:      document.getElementById('chk-sym'),
+    norepeat: document.getElementById('chk-norepeat'),
+  };
+
+  // ── Toggle visibility ──
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    toggleBtn.textContent = isHidden ? '🙈' : '👁';
+  });
+
+  // ── Strength logic ──
+  function assess(pw) {
+    const r = {
+      len:      pw.length >= 12,
+      upper:    /[A-Z]/.test(pw),
+      lower:    /[a-z]/.test(pw),
+      num:      /[0-9]/.test(pw),
+      sym:      /[^A-Za-z0-9]/.test(pw),
+      norepeat: pw.length > 0 && !/(.)\1\1/.test(pw),
+    };
+    r.score = Object.values(r).filter(Boolean).length;
+    return r;
+  }
+
+  function getStrengthInfo(score, pw) {
+    if (!pw) return { label: '—', color: 'var(--muted)', pct: 0 };
+    if (score <= 2) return { label: 'Weak',   color: 'var(--weak)',   pct: 20 };
+    if (score === 3) return { label: 'Fair',   color: 'var(--fair)',   pct: 45 };
+    if (score === 4) return { label: 'Good',   color: 'var(--good)',   pct: 70 };
+    if (score === 5) return { label: 'Strong', color: 'var(--strong)', pct: 90 };
+    return               { label: 'Very Strong', color: 'var(--strong)', pct: 100 };
+  }
+
+  function getSuggestions(r, pw) {
+    const tips = [];
+    if (!r.len)      tips.push('Make it 12+ characters');
+    if (!r.upper)    tips.push('Add uppercase letters (A-Z)');
+    if (!r.lower)    tips.push('Add lowercase letters (a-z)');
+    if (!r.num)      tips.push('Include numbers (0-9)');
+    if (!r.sym)      tips.push('Add symbols (!@#$%...)');
+    if (!r.norepeat) tips.push('Avoid repeating characters');
+    if (pw.length < 8) tips.push('At least 8 characters minimum');
+    return tips;
+  }
+
+  input.addEventListener('input', () => {
+    const pw = input.value;
+    const r  = assess(pw);
+    const si = getStrengthInfo(r.score, pw);
+
+    // bar
+    barFill.style.width      = si.pct + '%';
+    barFill.style.background = si.color;
+    strengthTxt.textContent  = si.label;
+    strengthTxt.style.color  = si.color;
+
+    // checks
+    Object.keys(checks).forEach(k => {
+      checks[k].classList.toggle('pass', r[k]);
+    });
+
+    // suggestions
+    const tips = getSuggestions(r, pw);
+    if (tips.length && pw.length > 0) {
+      suggTags.innerHTML = tips.map(t => `<span class="suggestion-tag">${t}</span>`).join('');
+      suggestions.classList.add('show');
+    } else {
+      suggestions.classList.remove('show');
+    }
+
+    // reset breach result on change
+    breachRes.className = 'breach-result';
+    breachRes.innerHTML = '';
+  });
+
+  // ── Breach check (HaveIBeenPwned k-anonymity) ──
+  async function sha1(str) {
+    const buf  = new TextEncoder().encode(str);
+    const hash = await crypto.subtle.digest('SHA-1', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
+  breachBtn.addEventListener('click', async () => {
+    const pw = input.value;
+    if (!pw) {
+      showBreachResult('error', '⚠️', 'Enter a password first', '');
+      return;
+    }
+    breachBtn.disabled = true;
+    breachBtn.textContent = '⏳ Checking…';
+    breachRes.className = 'breach-result';
+    breachRes.innerHTML = '';
+
+    try {
+      const hash   = await sha1(pw);
+      const prefix = hash.slice(0, 5);
+      const suffix = hash.slice(5);
+
+      const res  = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+      const text = await res.text();
+
+      const found = text.split('\r\n').find(line => line.startsWith(suffix));
+      if (found) {
+        const count = parseInt(found.split(':')[1]).toLocaleString();
+        showBreachResult('pwned', '🚨', 'Found in data breaches!', `This password appeared <strong style="font-style:normal">${count} times</strong> in leaked databases. Change it now.`);
+      } else {
+        showBreachResult('safe', '✅', 'Not found in any known breach', 'Great news — this password hasn\'t appeared in known data leaks.');
+      }
+    } catch (e) {
+      showBreachResult('error', '⚠️', 'Connection error', 'Couldn\'t reach the breach database. Check your internet connection.');
+    }
+
+    breachBtn.disabled = false;
+    breachBtn.textContent = '🔍 Check if leaked in a data breach';
+  });
+
+  function showBreachResult(type, icon, title, body) {
+    breachRes.className = `breach-result show ${type}`;
+    breachRes.innerHTML = `<span class="breach-icon">${icon}</span><strong>${title}</strong>${body}`;
+  }
+
+  // ── Password generator ──
+  const CHARS = {
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    num:   '0123456789',
+    sym:   '!@#$%^&*()-_=+[]{}|;:,.<>?',
+  };
+  const ALL = Object.values(CHARS).join('');
+
+  function generatePassword(len = 18) {
+    const arr = new Uint32Array(len);
+    crypto.getRandomValues(arr);
+    // ensure at least one from each category
+    const guaranteed = Object.values(CHARS).map(pool => pool[arr[0] % pool.length]);
+    const rest = Array.from({length: len - 4}, (_, i) => ALL[arr[i+4] % ALL.length]);
+    // shuffle
+    const combined = [...guaranteed, ...rest];
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = arr[i % arr.length] % (i + 1);
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+    return combined.join('');
+  }
+
+  genBtn.addEventListener('click', () => {
+    const pw = generatePassword(18);
+    genText.textContent = pw;
+    copyBtn.textContent = 'Copy';
+  });
+
+  copyBtn.addEventListener('click', () => {
+    const pw = genText.textContent;
+    if (pw === 'Click Generate →') return;
+    navigator.clipboard.writeText(pw).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+    });
+  });
+</script>
+</body>
+</html>
